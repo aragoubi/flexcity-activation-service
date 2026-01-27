@@ -2,12 +2,14 @@ package com.flexcity.activation.application;
 
 import com.flexcity.activation.domain.Asset;
 import com.flexcity.activation.domain.SelectedAsset;
+import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+@Service
 public class AssetSelectionService {
 
     public List<SelectedAsset> selectAssets(List<Asset> assets, LocalDate date, int requestedVolumeKw) {

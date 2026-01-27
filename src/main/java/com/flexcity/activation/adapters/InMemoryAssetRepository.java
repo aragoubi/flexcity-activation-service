@@ -2,11 +2,13 @@ package com.flexcity.activation.adapters;
 
 import com.flexcity.activation.domain.Asset;
 import com.flexcity.activation.ports.AssetRepository;
+import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
+@Repository
 public class InMemoryAssetRepository implements AssetRepository {
 
     private static final List<Asset> ASSETS = List.of(

@@ -4,9 +4,11 @@ import com.flexcity.activation.domain.ActivationRequest;
 import com.flexcity.activation.domain.Asset;
 import com.flexcity.activation.domain.SelectedAsset;
 import com.flexcity.activation.ports.AssetRepository;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+@Service
 public class ActivationService {
 
     private final AssetRepository assetRepository;
