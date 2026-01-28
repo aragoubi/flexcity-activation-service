@@ -4,6 +4,8 @@ import com.flexcity.activation.application.ActivationService;
 import com.flexcity.activation.domain.ActivationRequest;
 import com.flexcity.activation.domain.SelectedAsset;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,6 +18,8 @@ import java.util.List;
 @RequestMapping("/api/activations")
 public class ActivationController {
 
+    private static final Logger log = LoggerFactory.getLogger(ActivationController.class);
+
     private final ActivationService activationService;
 
     public ActivationController(ActivationService activationService) {
@@ -25,6 +29,9 @@ public class ActivationController {
     @PostMapping
     public ResponseEntity<ActivationResponseDto> createActivation(
             @Valid @RequestBody ActivationRequestDto requestDto) {
+
+        log.info("Received activation request: date={}, requestedVolumeKw={}",
+                requestDto.date(), requestDto.requestedVolumeKw());
 
         ActivationRequest domainRequest = new ActivationRequest(
                 requestDto.date(),
@@ -40,6 +47,8 @@ public class ActivationController {
                         asset.activationCostEur()
                 ))
                 .toList();
+
+        log.info("Activation completed: selectedAssets={}", assetDtos.size());
 
         return ResponseEntity.ok(new ActivationResponseDto(assetDtos));
     }
