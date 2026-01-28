@@ -1,5 +1,6 @@
 package com.flexcity.activation.api;
 
+import com.flexcity.activation.domain.InsufficientCapacityException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -26,9 +27,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(Map.of("error", message));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<Map<String, String>> handleInsufficientCapacity(IllegalStateException ex) {
-        log.warn("Business error: {}", ex.getMessage());
+    @ExceptionHandler(InsufficientCapacityException.class)
+    public ResponseEntity<Map<String, String>> handleInsufficientCapacity(InsufficientCapacityException ex) {
+        log.warn("Insufficient capacity: {}", ex.getMessage());
 
         return ResponseEntity.unprocessableEntity().body(Map.of("error", ex.getMessage()));
     }

@@ -1,6 +1,7 @@
 package com.flexcity.activation.application;
 
 import com.flexcity.activation.domain.Asset;
+import com.flexcity.activation.domain.InsufficientCapacityException;
 import com.flexcity.activation.domain.SelectedAsset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,73 +23,33 @@ class AssetSelectionServiceTest {
     }
 
     @Test
-    void shouldSelectSingleAssetForExactMatch() {
-        List<Asset> assets = List.of(
-                new Asset("A1", "Asset 1", 50.0, Set.of(DATE), 500)
-        );
-
-        List<SelectedAsset> result = service.selectAssets(assets, DATE, 500);
-
-        assertEquals(1, result.size());
-        assertEquals("A1", result.get(0).assetCode());
-        assertEquals(500, result.get(0).selectedVolumeKw());
-        assertEquals(50.0, result.get(0).activationCostEur());
-    }
-
-    @Test
-    void shouldSelectPartialVolumeFromAsset() {
-        List<Asset> assets = List.of(
-                new Asset("A1", "Asset 1", 50.0, Set.of(DATE), 1000)
-        );
-
-        List<SelectedAsset> result = service.selectAssets(assets, DATE, 300);
-
-        assertEquals(1, result.size());
-        assertEquals("A1", result.get(0).assetCode());
-        assertEquals(300, result.get(0).selectedVolumeKw());
-        assertEquals(50.0, result.get(0).activationCostEur());
-    }
-
-    @Test
-    void shouldThrowExceptionWhenInsufficientCapacity() {
-        List<Asset> assets = List.of(
-                new Asset("A1", "Asset 1", 50.0, Set.of(DATE), 200),
-                new Asset("A2", "Asset 2", 60.0, Set.of(DATE), 300)
-        );
-
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> service.selectAssets(assets, DATE, 1000)
-        );
-
-        assertTrue(exception.getMessage().contains("Insufficient capacity"));
-        assertTrue(exception.getMessage().contains("1000"));
-        assertTrue(exception.getMessage().contains("500"));
-    }
-
-    @Test
-    void shouldPreferCheaperAssetsFirst() {
+    void shouldSelectCheapestCombinationToMeetRequestedVolume() {
         List<Asset> assets = List.of(
                 new Asset("EXPENSIVE", "Expensive Asset", 100.0, Set.of(DATE), 500),
-                new Asset("CHEAP", "Cheap Asset", 30.0, Set.of(DATE), 500),
-                new Asset("MEDIUM", "Medium Asset", 60.0, Set.of(DATE), 500)
+                new Asset("CHEAP_1", "Cheap Asset 1", 20.0, Set.of(DATE), 300),
+                new Asset("CHEAP_2", "Cheap Asset 2", 30.0, Set.of(DATE), 400)
         );
 
-        List<SelectedAsset> result = service.selectAssets(assets, DATE, 800);
+        List<SelectedAsset> result = service.selectAssets(assets, DATE, 600);
 
-        assertEquals(2, result.size());
-        assertEquals("CHEAP", result.get(0).assetCode());
-        assertEquals(500, result.get(0).selectedVolumeKw());
-        assertEquals("MEDIUM", result.get(1).assetCode());
-        assertEquals(300, result.get(1).selectedVolumeKw());
+        int totalVolume = result.stream().mapToInt(SelectedAsset::selectedVolumeKw).sum();
+        assertTrue(totalVolume >= 600);
+
+        double totalCost = result.stream().mapToDouble(SelectedAsset::activationCostEur).sum();
+        assertEquals(50.0, totalCost);
+
+        List<String> codes = result.stream().map(SelectedAsset::assetCode).toList();
+        assertTrue(codes.contains("CHEAP_1"));
+        assertTrue(codes.contains("CHEAP_2"));
+        assertFalse(codes.contains("EXPENSIVE"));
     }
 
     @Test
-    void shouldFilterByAvailabilityDate() {
+    void shouldIgnoreAssetsNotAvailableOnGivenDate() {
         LocalDate targetDate = LocalDate.of(2024, 6, 2);
         List<Asset> assets = List.of(
                 new Asset("AVAILABLE", "Available Asset", 50.0, Set.of(targetDate), 500),
-                new Asset("UNAVAILABLE", "Unavailable Asset", 30.0, Set.of(DATE), 500)
+                new Asset("UNAVAILABLE", "Unavailable Asset", 10.0, Set.of(DATE), 1000)
         );
 
         List<SelectedAsset> result = service.selectAssets(assets, targetDate, 400);
@@ -98,35 +59,64 @@ class AssetSelectionServiceTest {
     }
 
     @Test
-    void shouldThrowWhenNoAssetsAvailableOnDate() {
+    void shouldThrowWhenRequestedVolumeCannotBeReached() {
         List<Asset> assets = List.of(
-                new Asset("A1", "Asset 1", 50.0, Set.of(DATE), 500)
-        );
-        LocalDate differentDate = LocalDate.of(2024, 7, 1);
-
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> service.selectAssets(assets, differentDate, 100)
+                new Asset("A1", "Asset 1", 50.0, Set.of(DATE), 200),
+                new Asset("A2", "Asset 2", 60.0, Set.of(DATE), 300)
         );
 
-        assertTrue(exception.getMessage().contains("Insufficient capacity"));
-        assertTrue(exception.getMessage().contains("0 kW available"));
+        InsufficientCapacityException exception = assertThrows(
+                InsufficientCapacityException.class,
+                () -> service.selectAssets(assets, DATE, 1000)
+        );
+
+        assertTrue(exception.getMessage().contains("1000"));
+        assertTrue(exception.getMessage().contains("500"));
     }
 
     @Test
-    void shouldSelectMultipleAssetsToMeetVolume() {
+    void shouldReturnEmptyListWhenNoAssetIsEligibleForGivenDate() {
         List<Asset> assets = List.of(
-                new Asset("A1", "Asset 1", 40.0, Set.of(DATE), 300),
-                new Asset("A2", "Asset 2", 50.0, Set.of(DATE), 400),
-                new Asset("A3", "Asset 3", 60.0, Set.of(DATE), 500)
+                new Asset("A1", "Asset 1", 50.0, Set.of(DATE), 500),
+                new Asset("A2", "Asset 2", 60.0, Set.of(DATE), 500)
+        );
+        LocalDate differentDate = LocalDate.of(2024, 7, 1);
+
+        List<SelectedAsset> result = service.selectAssets(assets, differentDate, 100);
+
+        assertTrue(result.isEmpty());
+    }
+
+
+    @Test
+    void shouldSelectSingleAssetWhenItAloneMeetsRequestedVolume() {
+        List<Asset> assets = List.of(
+                new Asset("LARGE", "Large Asset", 80.0, Set.of(DATE), 1000),
+                new Asset("SMALL", "Small Asset", 50.0, Set.of(DATE), 200)
         );
 
-        List<SelectedAsset> result = service.selectAssets(assets, DATE, 600);
+        List<SelectedAsset> result = service.selectAssets(assets, DATE, 800);
 
-        assertEquals(2, result.size());
-        assertEquals("A1", result.get(0).assetCode());
-        assertEquals(300, result.get(0).selectedVolumeKw());
-        assertEquals("A2", result.get(1).assetCode());
-        assertEquals(300, result.get(1).selectedVolumeKw());
+        assertEquals(1, result.size());
+        assertEquals("LARGE", result.get(0).assetCode());
+        assertEquals(80.0, result.get(0).activationCostEur());
+    }
+
+    @Test
+    void shouldPreferCheaperCombinationOverSingleExpensiveAsset() {
+        List<Asset> assets = List.of(
+                new Asset("EXPENSIVE_LARGE", "Expensive Large", 200.0, Set.of(DATE), 1000),
+                new Asset("CHEAP_1", "Cheap 1", 40.0, Set.of(DATE), 400),
+                new Asset("CHEAP_2", "Cheap 2", 40.0, Set.of(DATE), 400),
+                new Asset("CHEAP_3", "Cheap 3", 40.0, Set.of(DATE), 400)
+        );
+
+        List<SelectedAsset> result = service.selectAssets(assets, DATE, 1000);
+
+        double totalCost = result.stream().mapToDouble(SelectedAsset::activationCostEur).sum();
+        assertTrue(totalCost < 200.0);
+
+        int totalVolume = result.stream().mapToInt(SelectedAsset::selectedVolumeKw).sum();
+        assertTrue(totalVolume >= 1000);
     }
 }

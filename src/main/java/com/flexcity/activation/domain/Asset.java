@@ -25,4 +25,8 @@ public record Asset(
         // Ensure immutability by creating an unmodifiable copy
         availabilityDates = Set.copyOf(availabilityDates);
     }
+
+    public boolean canBeActivatedAt(LocalDate date) {
+        return availabilityDates.contains(date);
+    }
 }
